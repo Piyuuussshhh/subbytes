@@ -17,6 +17,21 @@ impl GF2NPolynomial {
         Self { degree: 0, terms }.fix_terms()
     }
 
+    pub fn from_byte(byte: u8) -> Self {
+        let terms = (0..8)
+            .rev()
+            .filter_map(|i| {
+                if (byte >> i) & 1 == 1 {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        Self { degree: 0, terms }.fix_terms()
+    }
+
     pub fn zero() -> Self {
         Self {
             degree: 0,
@@ -39,20 +54,20 @@ impl GF2NPolynomial {
         let mut T1 = GF2NPolynomial::zero();
         let mut T2 = GF2NPolynomial::one();
 
-        let mut table = Table::new();
-        table.set_header(vec!["Q", "A", "B", "R", "T1", "T2", "S"]);
+        // let mut table = Table::new();
+        // table.set_header(vec!["Q", "A", "B", "R", "T1", "T2", "S"]);
         while !B.terms.is_empty() {
             let (Q, R) = A.clone() / B.clone();
             let S = T1.clone() - Q.clone() * T2.clone();
-            table.add_row(vec![
-                Q.algebraic_string(),
-                A.algebraic_string(),
-                B.algebraic_string(),
-                R.algebraic_string(),
-                T1.algebraic_string(),
-                T2.algebraic_string(),
-                S.algebraic_string(),
-            ]);
+            // table.add_row(vec![
+            //     Q.algebraic_string(),
+            //     A.algebraic_string(),
+            //     B.algebraic_string(),
+            //     R.algebraic_string(),
+            //     T1.algebraic_string(),
+            //     T2.algebraic_string(),
+            //     S.algebraic_string(),
+            // ]);
             // Preparing next round of EEA
             A = B;
             B = R;
@@ -60,7 +75,7 @@ impl GF2NPolynomial {
             T2 = S;
         }
 
-        println!("{table}");
+        // println!("{table}");
 
         T1
     }
@@ -83,6 +98,14 @@ impl GF2NPolynomial {
             })
             .collect::<Vec<String>>()
             .join(" + ")
+    }
+
+    pub fn hex_string(&self) -> String {
+        let mut byte = 0u8;
+        for &power in &self.terms {
+            byte |= 1 << power;
+        }
+        format!("{:02X}", byte)
     }
 
     fn fix_terms(mut self) -> Self {
