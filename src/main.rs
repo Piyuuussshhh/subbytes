@@ -1,66 +1,83 @@
-use std::io;
+use std::io::{self, Write};
 
 mod polynomial;
-use polynomial::object::GF2NPolynomial;
 use polynomial::irr_poly::get_irreducible_polynomial;
+use polynomial::object::GF2NPolynomial;
+
+const S_BOX: [u8; 256] = [
+    0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
+    0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
+    0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
+    0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a, 0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
+    0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0, 0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
+    0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b, 0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
+    0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85, 0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
+    0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5, 0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
+    0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17, 0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
+    0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88, 0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
+    0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c, 0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
+    0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9, 0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
+    0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+    0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
+    0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
+    0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16,
+];
 
 fn main() {
-    // Take user input plaintext.
-    // Divide it into 128-bit (16 byte) chunks.
-    // For each chunk, make a 4x4 state matrix.
-    // For each byte in the state matrix, column wise, do the following:
-    //   1. Convert byte to polynomial.
-    //   2. Get the inverse of the polynomial in GF(2^8) wrt the AES irreducible polynomial.
-    //   3. Display the inverse.
-    //   4. Perform the affine transformations.
-    //   5. Store it in the state matrix.
-    // Finally, display the state matrix.
+    // Take a hexadecimal byte input from the user.
+    print!("[INPUT]\t\tEnter a byte in hexadecimal (0xPQ): 0x");
+    io::stdout().flush().unwrap();
+    let mut byte = String::new();
+    io::stdin().read_line(&mut byte).unwrap();
+    byte = byte.trim().to_string();
+    let byte = u8::from_str_radix(&byte, 16).unwrap();
 
-    println!("Enter plaintext:");
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Couldn't take input");
-    input = input.trim().to_string();
+    // Convert to a polynomial.
+    let polynomial = GF2NPolynomial::from_byte(byte);
 
-    let chunks = get_128bit_chunks(input);
-    display_128bit_chunks(&chunks);
-    let ciphertext_chunks = chunks.clone();
+    // Find its inverse.
+    let irreducible_polynomial = get_irreducible_polynomial(8);
+    let inverse = polynomial.inverse(&irreducible_polynomial);
+    println!(
+        "[INFO]\t\tInverse of 0x{:02X} in GF(2^8) is: 0x{}",
+        byte,
+        inverse.hex_string()
+    );
 
-    for chunk in chunks.iter() {
-        let mut state_matrix = get_state_matrix(*chunk);
-        println!("State Matrix before SubBytes: ");
-        display_state_matrix(state_matrix);
-        let rows = state_matrix.len();
-        let cols = state_matrix[0].len();
+    // Apply affine transformation:
+    //      1. Multiply with constant matrix.
+    let inverse_byte = inverse.into();
+    let temp = matrix_multiplication_subbytes(inverse_byte);
+    //      2. Add constant vector.
+    let result = temp ^ 0x63;
 
-        for row in 0..rows {
-            for col in 0..cols {
-                let byte = state_matrix[row][col];
-                println!("\nProcessing byte at position ({}, {}) of the state matrix: 0x{byte:02X}", row, col);
-                let poly = GF2NPolynomial::from_byte(byte);
-                let inv_poly = poly.inverse(&get_irreducible_polynomial(8));
-                println!("Inverse of byte 0x{byte:02X} is 0x{}", inv_poly.hex_string());
+    // Display result.
+    let result_polynomial = GF2NPolynomial::from_byte(result);
+    println!(
+        "[RESULT]\tResult of SubBytes operation: 0x{}",
+        result_polynomial.hex_string()
+    );
 
-                // Affine transformation.
-                let res_byte = matrix_multiplication_subbytes(byte);
-                let res_byte = res_byte ^ 0x63;
-                println!("After affine transformation: 0x{res_byte:02X}\n------------------------------------\n");
+    // Validate result with SBox table.
+    let mut enter = String::default();
+    println!("[INFO]\t\tPress enter for validation....");
+    io::stdin().read_line(&mut enter).unwrap();
 
-                state_matrix[row][col] = res_byte;
-            }
-        }
-
-        println!("State Matrix after SubBytes: ");
-        display_state_matrix(state_matrix);
+    let expected_result = S_BOX[byte as usize];
+    println!(
+        "[VALIDATION]\tExpected S-Box result:\t0x{:02X}",
+        expected_result
+    );
+    println!("[VALIDATION]\tYour calculated result:\t0x{:02X}", result);
+    println!("---------------------------------");
+    if result == expected_result {
+        println!("[SUCCESS]\tResult is valid.");
+    } else {
+        println!("[FAILURE]\tResult is incorrect.");
     }
-
-    println!("\nFinal Ciphertext after SubBytes for all chunks:");
-    display_final_ciphertext(&chunks);
-    chunks_to_string(&chunks);
 }
 
-fn matrix_multiplication_subbytes(mut byte: u8) -> u8 {
+fn matrix_multiplication_subbytes(byte: u8) -> u8 {
     let affine_matrix: [[u8; 8]; 8] = [
         [1, 0, 0, 0, 1, 1, 1, 1],
         [1, 1, 0, 0, 0, 1, 1, 1],
@@ -71,98 +88,28 @@ fn matrix_multiplication_subbytes(mut byte: u8) -> u8 {
         [0, 0, 1, 1, 1, 1, 1, 0],
         [0, 0, 0, 1, 1, 1, 1, 1],
     ];
+
     let byte_vector: [u8; 8] = [
-        (byte >> 7) & 1,
-        (byte >> 6) & 1,
-        (byte >> 5) & 1,
-        (byte >> 4) & 1,
-        (byte >> 3) & 1,
-        (byte >> 2) & 1,
-        (byte >> 1) & 1,
-        (byte >> 0) & 1,
+        (byte >> 0) & 1, // b0
+        (byte >> 1) & 1, // b1
+        (byte >> 2) & 1, // b2
+        (byte >> 3) & 1, // b3
+        (byte >> 4) & 1, // b4
+        (byte >> 5) & 1, // b5
+        (byte >> 6) & 1, // b6
+        (byte >> 7) & 1, // b7
     ];
 
+    let mut result = 0u8;
+
+    // Matrix multiplication affine_matrix * byte_vector.
     for i in 0..8 {
         let mut sum = 0u8;
         for j in 0..8 {
             sum ^= affine_matrix[i][j] & byte_vector[j];
         }
-        byte &= !(1 << (7 - i)); // Clear the bit at position (7 - i)
-        byte |= sum << (7 - i);  // Set the bit at position (7 - i) to sum
+        result |= sum << i;
     }
 
-    byte
-}
-
-fn get_128bit_chunks(input: String) -> Vec<[u8; 16]> {
-    let bytes = input.as_bytes();
-    let mut chunked = bytes
-        .chunks_exact(16)
-        .map(|chunk| {
-            let mut arr = [0u8; 16];
-            arr.copy_from_slice(chunk);
-            arr
-        })
-        .collect::<Vec<[u8; 16]>>();
-
-    let remainder = bytes.chunks_exact(16).remainder();
-    if !remainder.is_empty() {
-        // Here we apply padding (e.g., PKCS#7 padding) to the last block
-        let mut last_chunk = [0u8; 16];
-        let pad_len = 16 - remainder.len();
-        last_chunk[..remainder.len()].copy_from_slice(remainder);
-        for i in remainder.len()..16 {
-            last_chunk[i] = pad_len as u8;
-        }
-        chunked.push(last_chunk);
-    }
-
-    chunked
-}
-
-fn get_state_matrix(chunk: [u8; 16]) -> [[u8; 4]; 4] {
-    let mut state_matrix = [[0u8; 4]; 4];
-    for col in 0..4 {
-        for row in 0..4 {
-            state_matrix[row][col] = chunk[col * 4 + row];
-        }
-    }
-    state_matrix
-}
-
-fn chunks_to_string(chunks: &[[u8; 16]]) {
-    let bytes: Vec<u8> = chunks.iter().flatten().copied().collect();
-    println!("{}", String::from_utf8_lossy(&bytes).to_string());
-}
-
-fn display_128bit_chunks(chunks: &Vec<[u8; 16]>) {
-    for (i, chunk) in chunks.iter().enumerate() {
-        print!("Chunk {}: ", i + 1);
-        for &byte in chunk {
-            print!("{:02X} ", byte);
-        }
-        println!();
-    }
-}
-
-fn display_subbed_chunk(chunk: &[u8; 16]) {
-    for &byte in chunk {
-        print!("{:02X} ", byte);
-    }
-}
-
-fn display_final_ciphertext(chunks: &Vec<[u8; 16]>) {
-    for chunk in chunks {
-        display_subbed_chunk(chunk);
-    }
-    println!();
-}
-
-fn display_state_matrix(matrix: [[u8; 4]; 4]) {
-    for row in 0..4 {
-        for col in 0..4 {
-            print!("{:02X}\t", matrix[row][col]);
-        }
-        println!();
-    }
+    result
 }

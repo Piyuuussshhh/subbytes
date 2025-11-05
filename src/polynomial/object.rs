@@ -153,6 +153,17 @@ impl GF2NPolynomial {
     }
 }
 
+impl Into<u8> for GF2NPolynomial {
+    fn into(self) -> u8 {
+        let mut res: u8 = 0;
+        for term in self.terms {
+            res += 2u8.pow(term as u32);
+        }
+
+        res
+    }
+}
+
 impl Add for GF2NPolynomial {
     type Output = GF2NPolynomial;
 
